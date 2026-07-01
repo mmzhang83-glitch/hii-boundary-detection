@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Auto-generated build/install artifacts
+*.egg-info/
+build/
+dist/
+
+# Large binary data files (hydrated at install time)
+*.fits
+
+# Test output (can regenerate)
+test/test_plots/
+test/test_plots_real/
+test/test_plots_elliptical/
+test/test_plan.log
+test/test_plan.jsonl
+*.html

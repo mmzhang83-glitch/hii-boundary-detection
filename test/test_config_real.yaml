@@ -1,0 +1,199 @@
+# 真实 GLIMPSE 图像边界检测 — 全流程配置文件
+#
+# 本文件控制以下环节：
+#   1. 流程控制（跳过、输出目录、目标 bubble）
+#   2. 星表下载（Vizier Churchwell+2006）
+#   3. 图像下载（IRSA SIA GLIMPSE 8μm）
+#   4. 预处理（à trous 小波点源去除 + sigma_map）
+#   5. 边界检测算法参数（覆盖 hii_detection_config.yaml）
+#   6. Bootstrap 不确定性估计
+#
+# 用法：
+#   python run_test_plan_real.py                         # 从本文件加载全部参数
+#   python run_test_plan_real.py --config custom.yaml
+#
+# 单个步骤也可独立运行（向后兼容）：
+#   python preprocess_glimpse.py --config test_config_real.yaml --name N131
+#   python test_real_bubbles.py --config test_config_real.yaml
+
+
+# ============================================================================
+# 1. 流程控制（pipeline）
+# ============================================================================
+pipeline:
+  # 输出根目录，支持相对路径、绝对路径和 ~ 展开
+  # 子目录结构：catalog/  images/  preprocess/  detection/  result.html
+  output_dir: "test_plots_real"
+
+  # 预处理和边界检测的目标 bubble 名称（来自星表 CPA2006 编号，如 N131, S13 等）
+  # 只处理这一个 bubble，不遍历全部
+  name: "N131"
+
+  # 是否跳过下载阶段（星表 + 图像）
+  # true  = 已有 catalog CSV 和 download_manifest.json，直接使用
+  # false = 从 Vizier / IRSA 重新查询下载
+  skip_download: true
+
+  # 是否跳过预处理阶段
+  # true  = 已有 cleaned + sigma FITS，直接使用
+  # false = 重新运行 à trous 小波去点源 + sigma_map
+  skip_preprocess: true
+
+  # 是否仅重新绘图（跳过全流程计算，从已有 JSON/NPZ/FITS 重新生成图）
+  only_plot: false
+
+
+# ============================================================================
+# 2. 星表下载（catalog）— 对应 fetch_bubble_catalog.py
+# ============================================================================
+catalog:
+  # 从 Vizier J/ApJ/649/759/bubbles 下载的 bubble 数量
+  # 按 <R>（平均半径）降序排列，取前 N 个；仅保留 MFlags=="C"（闭合环形态）
+  n_bubbles: 5
+
+
+# ============================================================================
+# 3. 图像下载（download）— 对应 download_glimpse_images.py
+# ============================================================================
+download:
+  # 输出图像视场因子：图像边长 = fov_factor × 星表 Rout
+  # 例如 Rout=7.75' × 6 = 46.5' 见方
+  fov_factor: 6
+
+
+# ============================================================================
+# 4. 预处理参数（preprocess）— 对应 preprocess_glimpse.py
+# ============================================================================
+preprocess:
+  # ---- à trous 小波分解 ----
+  # 分解层数（B3 样条小波，5 层：w1~w5 + c5）
+  n_scales: 5
+
+  # ---- 点源检测（wavelet w₁ 阈值法）----
+  # w₁ 尺度上的检测阈值，以 sigma_local（局部 MAD）为单位
+  # 仅保留 |w₁| < sigma_threshold × sigma_local 的像素，其余标记为点源
+  sigma_threshold: 3.0
+
+  # 点源连通域最大面积（像素²），面积 > max_area 的视为延展发射而非点源
+  max_area: 200
+
+  # ---- 亮源检测（DAOStarFinder）----
+  # DAOStarFinder 检测阈值，以原图 rms 为单位；仅用于亮源掩膜
+  detection_threshold: 10.0
+
+  # 亮源圆度上限：|roundness| < max_ellipticity 才视为星点
+  # 0 = 完美圆，0.5 = 允许一定椭圆度
+  max_ellipticity: 0.5
+
+  # ---- 亮源掩膜半径（按峰值分档）----
+  # 掩膜半径上限 / 下限（像素）
+  bright_mask_radius_max: 50
+  bright_mask_radius_min: 2
+
+  # 亮度分档阈值（MJy/sr）
+  #   peak < peak_threshold_low                          → peak_radius_low
+  #   peak_threshold_low ≤ peak < peak_threshold_high    → peak_radius_mid
+  #   peak ≥ peak_threshold_high                         → peak_radius_high
+  peak_threshold_low: 1000.0
+  peak_threshold_high: 2000.0
+
+  # 各档掩膜半径（像素）
+  peak_radius_low: 5.0
+  peak_radius_mid: 10.0
+  peak_radius_high: 45.0
+
+  # Refine 阶段（在 cleaned 图上二次检测残留源）的统一掩膜半径（像素）
+  refine_radius: 10.0
+
+  # ---- 亮源回填 ----
+  # 回填方法："biharmonic"（skimage 双调和插值）或 "bg_noise"（环带背景+噪声）
+  bright_fill_method: "biharmonic"
+
+  # bg_noise 方法专属：掩膜向外膨胀的像素数，用于定义背景环带
+  bright_fill_expand: 5
+
+  # bg_noise 方法专属：环带像素 sigma-clip 剔除阈值
+  bright_fill_outlier_sigma: 3.0
+
+  # ---- 负环检测 ----
+  # 暗环（负环）最小/最大连通面积（像素²），0 = 禁用
+  # binary_fill_holes 找到的封闭孔洞，面积在 [min, max] 之间的标记为真负环
+  ring_min_area: 30
+  ring_max_area: 1000
+
+  # ---- sigma_map ----
+  # 滑动 MAD 窗口大小（像素），在 w₁ 上估计局部噪声
+  mad_window: 51
+
+  # sigma_map 稀疏网格步长（像素），越大越快
+  # 每隔 stride 像素采样一个点，线性插值到全分辨率
+  sigma_stride: 10
+
+  # ---- wavelet iterative soft-thresholding inpainting ----
+  # inpainting 迭代次数，0 = 跳过，退化为中值填充
+  # 每次迭代削除 30% |w|，n 次迭代后残余 0.7^n
+  n_inpaint_iters: 20
+
+  # 每轮削除的 w₁ 能量阈值比例（0.3 = 30%）
+  inpaint_lambda_w1: 0.3
+
+  # 每轮削除的 w₂ 能量阈值比例
+  inpaint_lambda_w2: 0.3
+
+  # ---- Refine（二次检测）----
+  # 在 cleaned 图上重新运行 DAOStarFinder 的迭代次数，0 = 不精炼
+  # 检测被首轮 inpainting 残余的亮源
+  n_refine_iters: 1
+
+  # Refine DAOStarFinder 检测阈值（× cleaned 图 rms）
+  # 比初始阈值更低，捕捉被 inpainting 减弱但仍有结构的残余源
+  refine_detection_threshold: 3.0
+
+  # ---- 调试 ----
+  # 是否将所有 à trous 分解尺度（w1~w5, c5）保存为 FITS 文件
+  debug_scales: true
+
+
+# ============================================================================
+# 5. 边界检测算法参数（detection）— 覆盖 hii_detection_config.yaml
+# ============================================================================
+detection:
+  # 下采样因子：检测前先 Gaussian 抗混叠平滑（σ = N/2 px）再 1/N 降采样
+  #   0  = 不做下采样，直接在 cleaned 原图上检测（不推荐：点源扣除残留会干扰边界检测）
+  #   N  = 平滑后取每 N 像素（图像缩小 N 倍，检测速度约快 N² 倍）
+  # 小尺度点源残留和噪声在平滑过程中被压制，有助于边界检测稳定性
+  # 建议使用 ≥4 的值；rmin_min_pixels 等绝对像素参数会同步缩放
+  cleanmap_downsamp_scale: 4
+
+  # 以下参数可选，不写的项自动从 hii_detection_config.yaml 继承默认值
+  # 可覆盖的参数列表（与 hii_detection_config.yaml 一致）：
+  #
+  #   smoothing_fwhm: 2.0           # 径向高斯平滑 FWHM（像素），0=关闭
+  #   cost_map_smoothing_sigma: 5.0 # cost map 角度平滑 σ（像素）
+  #   gradient_smoothing_sigma: 0.0 # Sobel 梯度后角度平滑 σ（像素）
+  #   boundary_smoothing_sigma: 0.0 # 最终边界平滑 σ（像素）
+  #   rmin_start_ratio: 0.05        # rmin 扫描起点 = max(rmax × ratio, rmin_min_pixels)
+  #   rmin_min_pixels: 5.0          # rmin 硬下限（像素）
+  #   rmax_limit_ratio: 0.7         # rmin 扫描上界 = rmax × ratio
+  #   n_steps: 0                    # rmin 扫描步数，0=自动（步长约 2 px）
+  #   stable_window: 3              # 连续稳定 rmin 点数
+  #   stable_threshold: 1           # |Δdiff| 稳定性阈值（像素）
+  #   coherence_penalty_weight: 0.5 # 梯度方向一致性惩罚 β
+  #   contrast_min: 0.05            # 边界对比度最低阈值，0=关闭
+  #   contrast_strip_width: 4       # 对比度条纹半宽（像素）
+  #   gradient_strip_width: 3       # 梯度方向一致性条纹半宽（像素）
+  #   angular_snr_weighting: false  # 角度 SNR 加权
+  #   detect_rising_edge: true      # true=暗→亮边界，false=亮→暗边界
+  #   method: "scan"                # 稳定区搜索方法："scan" 或 "iterative"
+
+
+# ============================================================================
+# 6. Bootstrap 不确定性估计（bootstrap）— 对应 detect_hii_boundary
+# ============================================================================
+bootstrap:
+  # Bootstrap 迭代次数，0 = 跳过不确定性估计
+  # 每次迭代：加噪声 → 重新检测边界 → 统计各角度的标准差
+  n_bootstrap: 100
+
+  # 并行进程数（1 = 单进程，>1 = 多进程并行计算）
+  n_workers: 10
