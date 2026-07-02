@@ -13,6 +13,37 @@ cd package
 pip install -e .
 ```
 
+### 从 GitHub 安装
+
+```bash
+# 方式一：直接 pip 安装
+pip install git+https://github.com/mmzhang83-glitch/hii-boundary-detection.git
+
+# 方式二：克隆后安装
+git clone https://github.com/mmzhang83-glitch/hii-boundary-detection.git
+cd hii-boundary-detection
+pip install -e .
+```
+
+#### 验证安装
+
+```bash
+python -c "from boundary_detection import detect_hii_boundary; print('导入成功')"
+```
+
+#### 运行测试
+
+```bash
+# 合成模型测试（Sharp Step 模型，跳过 bootstrap 快速验证）
+python test/run_test_plan.py --model "Sharp Step" --bootstrap-n 0
+
+# 全部合成模型测试
+python test/run_test_plan.py
+
+# 快速验证
+python test/quick_test.py --skip-real
+```
+
 依赖：`numpy>=1.24,<2` `scipy` `matplotlib` `astropy` `pyyaml` `scikit-image` `astroquery` `watroo`
 Python ≥ 3.10
 

@@ -13,6 +13,37 @@ cd package
 pip install -e .
 ```
 
+### Install from GitHub
+
+```bash
+# Option 1: Direct pip install
+pip install git+https://github.com/mmzhang83-glitch/hii-boundary-detection.git
+
+# Option 2: Clone then install
+git clone https://github.com/mmzhang83-glitch/hii-boundary-detection.git
+cd hii-boundary-detection
+pip install -e .
+```
+
+#### Verify Installation
+
+```bash
+python -c "from boundary_detection import detect_hii_boundary; print('OK')"
+```
+
+#### Run Tests
+
+```bash
+# Synthetic model test (Sharp Step, skip bootstrap for fast verification)
+python test/run_test_plan.py --model "Sharp Step" --bootstrap-n 0
+
+# All synthetic model tests
+python test/run_test_plan.py
+
+# Quick smoke test
+python test/quick_test.py --skip-real
+```
+
 Dependencies: `numpy>=1.24,<2` `scipy` `matplotlib` `astropy` `pyyaml` `scikit-image` `astroquery` `watroo`
 Python ≥ 3.10
 

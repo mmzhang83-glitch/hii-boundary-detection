@@ -282,18 +282,24 @@ def _clean_dir(path: Path):
 def _ensure_doc_files():
     """Ensure bilingual README files (zh + en) are present in the package.
 
-    - ``package/README.zh.md`` + ``package/README.en.md``: main package READMEs
-      (live at package root, not affected by clean; verify existence).
-    - ``test/README.zh.md`` + ``test/README.en.md``: test READMEs, restored from
-      saved content after clean, or copied from source if available.
+    - ``package/README.zh.md`` + ``package/README.en.md``: copied from root
+      (root is the authoritative source, consistent with three-tier system).
+    - ``test/README.zh.md`` + ``test/README.en.md``: restored from saved content
+      after clean, or copied from source if available.
     """
     global _saved_test_readme_zh, _saved_test_readme_en
 
-    # Main READMEs — live at package root, not affected by clean
+    # Main READMEs — copy from root (authoritative source)
     for lang in ('zh', 'en'):
-        path = PACKAGE_DIR / f'README.{lang}.md'
-        status = '✓' if path.exists() else '— MISSING (create manually)'
-        print(f'  doc: package/README.{lang}.md {status}')
+        src = SOURCE_DIR / f'README.{lang}.md'
+        dst = PACKAGE_DIR / f'README.{lang}.md'
+        if src.exists():
+            shutil.copy2(src, dst)
+            print(f'  doc: package/README.{lang}.md (copied from root)')
+        elif dst.exists():
+            print(f'  doc: package/README.{lang}.md (exists, no root source)')
+        else:
+            print(f'  doc: package/README.{lang}.md — MISSING (no source found)')
 
     # Test READMEs — restore after clean, or copy from source
     for lang, saved in [('zh', _saved_test_readme_zh), ('en', _saved_test_readme_en)]:
